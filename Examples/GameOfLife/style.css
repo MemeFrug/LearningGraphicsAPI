@@ -1,0 +1,16 @@
+body, html {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+}
+
+canvas {
+    margin: 10px;
+    border: 1px black solid;
+    width: 100%;
+    aspect-ratio: 16/9;
+}
