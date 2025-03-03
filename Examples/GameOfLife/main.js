@@ -1,3 +1,6 @@
+// Information from https://codelabs.developers.google.com/your-first-webgpu-app#3
+// Written by Max K
+
 console.log("main.js loaded")
 
 // Lets check if WebGPU is available on the user's browser
@@ -27,6 +30,72 @@ const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
 context.configure({
     device: device, // What device im going to use the context with
     format: canvasFormat // The texture format the context should use
+});
+
+// Get the Vertices for rendering. This is 2 triangles to make a square
+const vertices = new Float32Array([
+    // X,   Y,
+    -0.8, -0.8, // Triangle 1 (Blue)
+    0.8, -0.8,
+    0.8, 0.8,
+
+    -0.8, -0.8, // Triangle 2 (Red)
+    0.8, 0.8,
+    -0.8, 0.8,
+]);
+
+// Create a GPUBuffer object to give the vertex data to the GPU memory
+const vertexBuffer = device.createBuffer({
+    label: "Cell vertices", // Giving the buffer a label will help with understanding errors
+    size: vertices.byteLength, // 48 bytes, 32-bit float (4 bytes) * number of vertices in the array (12)  
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, // Two of the https://gpuweb.github.io/gpuweb/#buffer-usage/ (the bitwise OR symbol |  )
+});
+
+//Add the vertex data into the vertexBuffer's memory
+device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/0, vertices);
+
+//We need to tell the gpu what is the layout of the GPUBuffer object. The format is https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexbufferlayout
+const vertexBufferLayout = {
+    arrayStride: 8, // How much to skip forward to get to the next vertex. a 32bit float is 4 bytes therefore 2 of them is 8 bytes
+    attributes: [{ // This one will only contain the position of the vertex, but could be colour, and direction
+        format: "float32x2", // https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat
+        offset: 0, // How many bytes into this vertex this attribute starts
+        shaderLocation: 0, // Position, see vertex shader (arbitrary between 0 and 15)
+    }],
+};
+
+//Creating a Shader, Returns an GPUShaderModule obect with the compiled results (https://gpuweb.github.io/gpuweb/#gpushadermodule)
+const cellShaderModule = device.createShaderModule({
+    label: "Cell shader",
+    code: `
+      @vertex // Defines what scope the function is
+      fn vertexMain(@location(0) pos: vec2f) -> @builtin(position) vec4f{ //Must at least return the final position being processed in clip space.
+        return vec4f(pos.x, pos.y, 0, 1); // (X, Y, Z, W) (W used for 4x4 matrices)
+        // Can be rewritten as return vec4f(pos, 0, 1);
+      }
+
+      @fragment
+      fn fragmentMain() -> @location(0) vec4f { // Returned vec4f is a colour not position. The location(0) indicated what colorAttachment from the beginRenderPass call is written to.
+        return vec4f(1,0,0,1) // Red, green, blue, Alpha
+      }
+    `
+});
+
+const cellPipeline = device.createRenderPipeline({
+    label: "Cell pipeline",
+    layout: "auto", // What types of inputs (Other than vertex buffers)
+    vertex: {
+        module: cellShaderModule, // GPUShaderModule
+        entryPoint: "vertexMain",
+        buffers: [vertexBufferLayout]
+    },
+    fragment: {
+        module: cellShaderModule,
+        entryPoint: "fragmentMain",
+        targets: [{
+            format: canvasFormat
+        }]
+    }
 });
 
 // Clear the canvas with a solid colour
