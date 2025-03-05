@@ -9,8 +9,5 @@ body, html {
 }
 
 canvas {
-    margin: 10px;
-    border: 1px black solid;
     width: 100%;
-    aspect-ratio: 16/9;
 }
