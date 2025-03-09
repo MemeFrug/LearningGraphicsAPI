@@ -3,7 +3,10 @@
         "module": "ESNext",
         "moduleResolution": "Bundler",
         "target": "ES2022",
-
+        
+        // This is the included line!
+        "types": ["@webgpu/types"],
+        
         "jsx": "react",
         "allowImportingTsExtensions": true,
         "strictNullChecks": true,
