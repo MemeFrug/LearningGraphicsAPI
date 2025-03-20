@@ -3,7 +3,7 @@
 
 console.log("main.js loaded")
 
-const GRID_SIZE = 128;
+const GRID_SIZE = 256;
 
 // Lets check if WebGPU is available on the user's browser
 if (!navigator.gpu) {
