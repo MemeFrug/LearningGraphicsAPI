@@ -3,12 +3,12 @@
 
 console.log("main.js loaded")
 
-const GRID_SIZE = 256
+const GRID_SIZE = 128;
 
 // Lets check if WebGPU is available on the user's browser
 if (!navigator.gpu) {
     throw new Error("The User has WebGPU!")
-}
+};
 
 // Get an GPUAdaptor that serves as an point to access the GPU
 const adapter = await navigator.gpu.requestAdapter()
@@ -143,7 +143,7 @@ const cellShaderModule = device.createShaderModule({
 });
 
 
-const WORKGROUP_SIZE = 16
+const WORKGROUP_SIZE = 8
 const cellSimulationShader = device.createShaderModule({
     label: "Simulation Shader",
     code:  /* wgsl */ `
