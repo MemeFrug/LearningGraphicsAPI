@@ -7,7 +7,7 @@ const GRID_SIZE = 256;
 
 // Lets check if WebGPU is available on the user's browser
 if (!navigator.gpu) {
-    throw new Error("The User has WebGPU!")
+    throw new Error("The User does not have WebGPU!")
 };
 
 // Get an GPUAdaptor that serves as an point to access the GPU
