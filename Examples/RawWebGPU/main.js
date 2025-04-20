@@ -1,3 +1,4 @@
+// Written From Alain's Blog: https://alain.xyz/blog/raw-webgpu
 console.log("main.js loaded");
 
 // First I need to access WebGPU's API
@@ -8,6 +9,9 @@ if (!entry) {
 
 // Get the canvas
 let canvas = document.getElementById("mainCanvas");
+//Initialise the canvas
+canvas.width = 1920;
+canvas.height = 1080;
 
 // I need to get an adaptor 
 let adapter = null; // Physical properties of a given GPU, such as its name, extensions, and device limits.
@@ -19,6 +23,30 @@ let queue = null; // A Queue allows work to be sent asynchronously to the GPU.
 
 let context = canvas.getContext("webgpu");
 let canvasFormat = null;
+
+// Declare attachment handles
+let depthTexture = null;
+let depthTextureView = null;
+
+// Declare canvas context image handles
+let colorTexture = null;
+let colorTextureView = null;
+
+// Declare buffer handles
+let positionBuffer = null;
+let colorBuffer = null;
+let indexBuffer = null;
+
+// Declare Command Handles
+let commandEncoder = null;
+let passEncoder = null;
+
+// Render Pipeline
+let pipeline = null;
+
+//Bind Group
+let uniformBindGroup = null;
+let uniformBindGroupLayout = null;
 
 async function init() {
     adapter = await entry.requestAdapter(); // Request Adapter
@@ -50,10 +78,6 @@ async function init() {
     // various aspects of a deferred render such as view space normals, PBR, reflectivity etc.
     // Frame buffers attachments are references to texture views
 
-    // Declare attachment handles
-    let depthTexture = null;
-    let depthTextureView = null;
-
     // Create Depth Backing GPUTextureDescriptor
     const depthTextureDesc = {
         size: [canvas.width, canvas.height, 1],
@@ -64,10 +88,6 @@ async function init() {
 
     depthTexture = device.createTexture(depthTextureDesc);
     depthTextureView = depthTexture.createView();
-
-    // Declare canvas context image handles
-    let colorTexture = null;
-    let colorTextureView = null;
     
     colorTexture = context.getCurrentTexture();
     colorTextureView = colorTexture.createView();
@@ -95,10 +115,6 @@ async function init() {
     // Index Buffer Data
     const indices = new Uint16Array([0, 1, 2]);
 
-    // ✋ Declare buffer handles
-    let positionBuffer = null;
-    let colorBuffer = null;
-    let indexBuffer = null;
 
     const createBuffer = (arr, usage) => {
         let desc = {
@@ -157,7 +173,7 @@ async function init() {
     `})
 
     // Uniform buffer to feed data directly into the shader module
-    // 👔 Uniform Data
+    // Uniform Data
     const uniformData = new Float32Array([
     
         // ♟️ ModelViewProjection Matrix (Identity)
@@ -172,12 +188,150 @@ async function init() {
         // 🟣 Accent Color
         0.8, 0.2, 0.8, 1.0,
     ]);
-    
-    // ✋ Declare buffer handles
+
+    //Graphics Pipeline
+    // Input Assembly
+    const positionAttribDesc = {
+        shaderLocation: 0, // @location(0)
+        offset: 0,
+        format: "float32x3",
+    };    
+    const colorAttribDesc = {
+        shaderLocation: 1, // @location(0)
+        offset: 0,
+        format: "float32x3",
+    };
+    const positionBufferDesc = {
+        attributes: [positionAttribDesc],
+        arrayStride: 4 * 3, //sizeof(float) * 3
+        stepMode: "vertex",
+    };
+    const colorBufferDesc = {
+        attributes: [colorAttribDesc],
+        arrayStride: 4 * 3, //sizeof(float) * 3
+        stepMode: "vertex",
+    };
+
+    // Depth
+    const depthStencil = {
+        depthWriteEnabled: true,
+        depthCompare: "less",
+        format: "depth24plus-stencil8",
+    };
+
+    // Uniform Data
+    //Bind Group Layout
+    uniformBindGroupLayout = device.createBindGroupLayout({
+        entries: [
+            {
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX,
+            buffer: {},
+            },
+        ],
+    });    
+    const layout = device.createPipelineLayout({ bindGroupLayouts: [uniformBindGroupLayout] });
+
+    // Shader Stages
+    const vertex = {
+        module: vertModule,
+        entryPoint: "main",
+        buffers: [positionBufferDesc, colorBufferDesc],
+    };
+
+    // Color/Blend State
+    const colorState = {
+        format: "bgra8unorm",
+    };
+
+    const fragment = {
+        module: fragModule,
+        entryPoint: "main",
+        targets: [colorState],
+    };
+
+    // Rasterization
+    const primitive = {
+        frontFace: "cw",
+        cullMode: "none",
+        topology: "triangle-list",
+    };
+
+    pipeline = await device.createRenderPipelineAsync({
+        layout: layout,
+        vertex: vertex,
+        fragment: fragment,
+        primitive: primitive,
+        depthStencil: depthStencil,
+    })
+
+    // Declare buffer handles
     let uniformBuffer = createBuffer(uniformData, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
 
+    // Pipeline Layout
+    uniformBindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+            {
+                binding: 0,
+                resource: {
+                    buffer: uniformBuffer,
+                },
+            },
+        ],
+    });
+
+    //Start Rendering
+    render();
 }
 
-init();
+const encodeCommands = () => {
+    const renderPassDesc = {
+        colorAttachments: [{
+            view: colorTextureView,
+            clearValue: [0, 0, 0, 1], // rgba
+            loadOp: "clear",
+            storeOp: "store",
+        },],
+        depthStencilAttachment: {
+            view: depthTextureView,
+            depthClearValue: 1,
+            depthLoadOp: "clear",
+            depthStoreOp: "store",
+            stencilClearValue: 0,
+            stencilLoadOp: "clear",
+            stencilStoreOp: "store",
+        },
+    };
+    commandEncoder = device.createCommandEncoder();
+
+    //Encode Drawing Commands
+    passEncoder = commandEncoder.beginRenderPass(renderPassDesc);
+    passEncoder.setPipeline(pipeline);
+    passEncoder.setBindGroup(0, uniformBindGroup); 
+    // passEncoder.setViewport(0, 0, canvas.width, canvas.height, 0, 1);
+    // passEncoder.setScissorRect(0, 0, canvas.width, canvas.height);
+    passEncoder.setVertexBuffer(0, positionBuffer);
+    passEncoder.setVertexBuffer(1, colorBuffer);
+    passEncoder.setIndexBuffer(indexBuffer, "uint16");
+    passEncoder.drawIndexed(3);
+    passEncoder.end();
+
+    queue.submit([commandEncoder.finish()]);
+}
+
+const render = () => {
+    // Acquire next image from context
+    colorTexture = context.getCurrentTexture();
+    colorTextureView = colorTexture.createView();
+
+    //Write and submit commands to queue
+    encodeCommands();
+
+    // Next frame
+    requestAnimationFrame(render);
+}
+
+await init();
 
 
