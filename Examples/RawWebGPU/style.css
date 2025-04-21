@@ -7,12 +7,10 @@ body, html {
     height: 100%;
     width: 100%;
 
-    background-color: black;
+    background-color: rgba(0, 0, 0, 0.536);
 }
 
 canvas {
-    height: 100%;
     width: 100%;
-
-    aspect-ratio: 16/9;
+    max-width: fit-content;
 }

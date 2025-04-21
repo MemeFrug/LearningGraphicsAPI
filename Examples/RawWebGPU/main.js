@@ -61,16 +61,14 @@ async function init() {
     if (!queue) {
         throw new Error("Queue access was not found", queue);
     }
-    canvasFormat =  navigator.gpu.getPreferredCanvasFormat();
 
     // Configure Canvas Context
+    canvasFormat =  navigator.gpu.getPreferredCanvasFormat();
     const canvasConfig = {
         device: device,
         format: canvasFormat
     };
-    
     context.configure(canvasConfig);
-
     
     //Frame Buffer Attachments
     // When executing different passes of the rendering system, different output textures
