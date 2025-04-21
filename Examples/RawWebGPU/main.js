@@ -97,17 +97,17 @@ async function init() {
     */
 
     //Position Vertex Buffer Data
-    const positions = new Float32Array([
-        1.0, -1.0, 0.0, 
-        -1.0, -1.0, 0.0, 
-        0.0,  1.0, 0.0,
+    let positions = new Float32Array([
+        0.5, -0.5, 0.0, // Vertex Point 1
+        -0.5, -0.5, 0.0, // Vertex Point 2
+        0.0,  0.5, 0.0, // Vertex Point 3
     ]);
 
     //Color Vertex Buffer Data
     const colors = new Float32Array([
-        1.0, 0.0, 0.0, // 🔴
-        0.0, 1.0, 0.0, // 🟢
-        0.0, 0.0, 1.0, // 🔵
+        1.0, 0.0, 0.0, // Point 1 RGB
+        0.0, 1.0, 0.0, // Point 2 RGB
+        0.0, 0.0, 1.0, // Point 3 RGB
     ]);
 
     // Index Buffer Data
@@ -181,13 +181,28 @@ async function init() {
         0.0, 0.0, 0.0, 1.0,
     
         // 🔴 Primary Color
-        0.9, 0.1, 0.3, 1.0,
+        0.9, 0.1, 0.3, 1.0, // Don't quite know what these do
     
         // 🟣 Accent Color
-        0.8, 0.2, 0.8, 1.0,
+        0.8, 0.2, 0.8, 1.0, // Don't quiet know what these do
     ]);
+    let uniformBuffer = createBuffer(uniformData, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST); // Create the Buffer Handle Also at the end of the pipeline creation
+
+    //Bind Group Layout
+    uniformBindGroupLayout = device.createBindGroupLayout({
+        entries: [
+            {
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX,
+            buffer: {},
+            },
+        ],
+    }); 
 
     //Graphics Pipeline
+    // Uniform Data
+    const layout = device.createPipelineLayout({ bindGroupLayouts: [uniformBindGroupLayout] });
+
     // Input Assembly
     const positionAttribDesc = {
         shaderLocation: 0, // @location(0)
@@ -214,21 +229,8 @@ async function init() {
     const depthStencil = {
         depthWriteEnabled: true,
         depthCompare: "less",
-        format: "depth24plus-stencil8",
+        format: "depth24plus-stencil8", // Dont necessarily know what this means, and other formats might possibly mean
     };
-
-    // Uniform Data
-    //Bind Group Layout
-    uniformBindGroupLayout = device.createBindGroupLayout({
-        entries: [
-            {
-            binding: 0,
-            visibility: GPUShaderStage.VERTEX,
-            buffer: {},
-            },
-        ],
-    });    
-    const layout = device.createPipelineLayout({ bindGroupLayouts: [uniformBindGroupLayout] });
 
     // Shader Stages
     const vertex = {
@@ -263,10 +265,6 @@ async function init() {
         depthStencil: depthStencil,
     })
 
-    // Declare buffer handles
-    let uniformBuffer = createBuffer(uniformData, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
-
-    // Pipeline Layout
     uniformBindGroup = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
         entries: [
@@ -284,10 +282,12 @@ async function init() {
 }
 
 const encodeCommands = () => {
+    commandEncoder = device.createCommandEncoder();
+
     const renderPassDesc = {
         colorAttachments: [{
             view: colorTextureView,
-            clearValue: [0, 0, 0, 1], // rgba
+            clearValue: [0, 0, 0, 1], // rgba, Sets the background
             loadOp: "clear",
             storeOp: "store",
         },],
@@ -301,21 +301,22 @@ const encodeCommands = () => {
             stencilStoreOp: "store",
         },
     };
-    commandEncoder = device.createCommandEncoder();
+    passEncoder = commandEncoder.beginRenderPass(renderPassDesc);
 
     //Encode Drawing Commands
-    passEncoder = commandEncoder.beginRenderPass(renderPassDesc);
     passEncoder.setPipeline(pipeline);
     passEncoder.setBindGroup(0, uniformBindGroup); 
-    // passEncoder.setViewport(0, 0, canvas.width, canvas.height, 0, 1);
-    // passEncoder.setScissorRect(0, 0, canvas.width, canvas.height);
+    passEncoder.setViewport(0, 0, canvas.width, canvas.height, 0, 1); // Don't know what this one does, but is inferred to change viewport position and size
+    passEncoder.setScissorRect(0, 0, canvas.width, canvas.height); // Don't know what these do, could do more research
     passEncoder.setVertexBuffer(0, positionBuffer);
     passEncoder.setVertexBuffer(1, colorBuffer);
     passEncoder.setIndexBuffer(indexBuffer, "uint16");
     passEncoder.drawIndexed(3);
+
+    //Finish Encoding Drawing Commands
     passEncoder.end();
 
-    queue.submit([commandEncoder.finish()]);
+    queue.submit([commandEncoder.finish()]); // Send to GPU to Render
 }
 
 const render = () => {
@@ -330,6 +331,4 @@ const render = () => {
     requestAnimationFrame(render);
 }
 
-await init();
-
-
+init();
