@@ -37,7 +37,14 @@
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .box:hover {
+        .greyed {
+            background-color: grey;
+            text-align: center;
+            opacity: 0.1;
+            cursor:no-drop;
+        }
+
+        .animationHover:hover {
             transform: scale(1.1);
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.7);
         }
@@ -45,8 +52,9 @@
 </head>
 <body>
     <div class="container">
-        <a href="./Examples/GameOfLife/index.html" class="box">Example 1</a>
-        <a href="./Examples/RawWebGPU/index.html" class="box">Example 2</a>
+        <a href="./Examples/GameOfLife/index.html" class="box animationHover">Example 1</a>
+        <a href="./Examples/RawWebGPU/index.html" class="box animationHover">Example 2</a>
+        <a href="./" class="box greyed">Output of Learning</a>
     </div>
 </body>
 </html>
