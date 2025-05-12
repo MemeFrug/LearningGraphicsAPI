@@ -39,11 +39,11 @@ context.configure({
 // Get the Vertices for rendering. This is 2 triangles to make a square
 const vertices = new Float32Array([
     // X,   Y,
-    -1, -1, // Triangle 1 (Blue)
+    -1, -1, // Triangle 1 
     1, -1,
     1, 1,
 
-    -1, -1, // Triangle 2 (Red)
+    -1, -1, // Triangle 2 
     1, 1,
     -1, 1,
 ]);
