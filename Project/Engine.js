@@ -1,64 +1,105 @@
 export {Engine}
 //Written By Max K
 class Engine {
-    constructor(canvas = null, InstantiateOnLoad = true) {
-        if (InstantiateOnLoad) {
-            window.onload = this.Instantiate()
-        }
+    constructor(canvas = null) {
         this.canvas = canvas;
         this.context = null;
-
-        // I need to get an adaptor 
-        this.adapter = null; // Physical properties of a given GPU, such as its name, extensions, and device limits.
-        //device handle
-        this.device = null; // How you access the core of WebGPU API, and will alow you to create the data structures you'll need
-        // Declare a queue handle
-        this.queue = null; // A Queue allows work to be sent asynchronously to the GPU.
-        // Declare attachment handles
-        this.depthTexture = null;
-        this.depthTextureView = null;
-
-        // Declare canvas context image handles
-        this.colorTexture = null;
-        this.colorTextureView = null;
-
-        // Declare buffer handles
-        this.vertexBuffer = null;
-        this.colorBuffer = null;
-        this.indexBuffer = null;
-
-        // Declare Command Handles
+        this.canvasFormat = null;
         this.commandEncoder = null;
+        this.device = null;
 
-        // Render Pipeline
-        this.pipeline = null;
-        this.onload = () => {};
-        //Bind Group
-        this.uniformBindGroup = null;
-        this.uniformBindGroupLayout = null;
+        this.shaderCodeModule = null;
+
+        this.renderPass = null;
+
+        this.bindGroups = [
+            
+        ];
+
+        this.vertexBuffers = [
+
+        ];
     }
 
-    createBuffer = (arr, usage) => { // Returns Buffer
-        let desc = {
-            size: (arr.byteLength + 3) & ~3,
-            usage,
-            mappedAtCreation: true,
-        }
-        // Create Buffer
-        let buffer = device.createBuffer(desc);
-
-        const writeArray = arr instanceof Uint16Array ? new Uint16Array(buffer.getMappedRange()) : new Float32Array(buffer.getMappedRange());
-        writeArray.set(arr);
-        buffer.unmap();
-        return buffer;
+    createVertexBuffer = (vertices, bufferLayout = null, label = "Buffer"+this.vertexBuffers.length, instances=1) => {
+        console.log("Creating Vertex Buffer");
+        // Create a vertex buffer to hold the vertices
+        const buffer = this.device.createBuffer({
+            label: label,
+            size: vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        })
+        this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, vertices); // Write the vertices to the buffer
+        this.vertexBuffers.push({buffer: buffer, layout: bufferLayout, instances: instances}); // Add the buffer to the list of vertex buffers
     }
 
-    ApplyCanvas = async (canvas, width = 1920, height = 1080) => {
+    createUniformBuffer = (data, label = "UniformBuffer"+this.vertexBuffers.length) => {
+        console.log("Creating Uniform Buffer");
+        // Create a uniform buffer to hold the uniforms
+        const buffer = this.device.createBuffer({
+            label: label,
+            size: data.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        })
+        this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, data); // Write the uniforms to the buffer
+        return {buffer:buffer, updateBuffer: (updateValue) => {this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, updateValue);}};
+    }
+
+    createBindGroup = (uniformBuffer, pipeline, shaderGroup = 0, shaderBind) => {
+        console.log("Creating Bind Group");
+        // Create a bind group to hold the uniforms and the bind group layout
+        const GPUbindGroup = this.device.createBindGroup({
+            label: "BindGroup",
+            layout: pipeline.getBindGroupLayout(shaderGroup), // The layout of the bind group, this is the first layout in the pipeline
+            entries: [{
+                binding: shaderBind, // The binding of the uniform buffer in the shader
+                resource: { buffer: uniformBuffer }, // The uniform buffer to be used in the bind group
+            }],
+        });
+        this.bindGroups.push({bindGroup: GPUbindGroup, shaderBind: shaderBind}); // Set the bind group to be used in the render pass
+    }
+
+    createPipeline = (vertexModule, fragmentModule, vertexBufferLayout) => {
+        console.log("Creating Pipeline");
+        // Create a pipeline to hold the shaders and the vertex buffers
+        const pipeline = this.device.createRenderPipeline({
+            label: "Pipeline",
+            layout: "auto", // The layout of the pipeline, auto will create a new layout for the pipeline
+            // The layout of the pipeline is used to bind the vertex buffers and the shaders to the pipeline
+            vertex: {
+                module: vertexModule,
+                entryPoint: "vertMain",
+                buffers: [vertexBufferLayout], // The layout of the vertex buffer
+            },
+            fragment: {
+                module: fragmentModule,
+                entryPoint: "fragMain",
+                targets: [{
+                    format: this.canvasFormat, // The format of the canvas
+                }],
+            },
+            primitive: { // RESEARCH THIS
+                topology: "triangle-list", // The topology of the vertices
+            },
+        });
+
+        return pipeline; // Return the pipeline
+    }
+
+    getShaderModule = (shaderCode) => {
+        console.log("Setting Shaders,", {code: shaderCode});
+        // Set the shaders to be used in the engine
+        const shaderCodeModule = this.device.createShaderModule({ label: "FragAndVertShader", code: shaderCode });
+        return shaderCodeModule; // Return the shader module
+    }
+
+
+    ApplyCanvas = (canvas, width = 1920, height = 1080) => {
         console.log("Applying Canvas");
         //Initialise the canvas
+        canvas.width=width;
+        canvas.height=height;
         this.canvas = canvas;
-        canvas.width=1920;
-        canvas.height=1080;
 
         //Get the canvas
         this.context = canvas.getContext("webgpu");
@@ -68,6 +109,23 @@ class Engine {
             device: this.device, // What device im going to use the context with
             format: this.canvasFormat // The texture format the context should use
         });
+
+        const observer = new ResizeObserver(entries => {
+            for (const entry of entries) {
+              const width = entry.devicePixelContentBoxSize?.[0].inlineSize ||
+                            entry.contentBoxSize[0].inlineSize * devicePixelRatio;
+              const height = entry.devicePixelContentBoxSize?.[0].blockSize ||
+                             entry.contentBoxSize[0].blockSize * devicePixelRatio;
+              const canvasTarget = entry.target;
+              canvasTarget.width = Math.max(1, Math.min(width, this.device.limits.maxTextureDimension2D));
+              canvasTarget.height = Math.max(1, Math.min(height, this.device.limits.maxTextureDimension2D));
+            }
+          });
+          try { // To ensure that the observer works in all browsers
+            observer.observe(canvas, { box: 'device-pixel-content-box' });
+          } catch {
+            observer.observe(canvas, { box: 'content-box' });
+          }
     }
 
     Instantiate = async () => {
@@ -91,63 +149,42 @@ class Engine {
             await this.ApplyCanvas(this.canvas);
         }
 
-        // Create Depth Backing GPUTextureDescriptor
-        const depthTextureDesc = {
-            size: [this.canvas.width, this.canvas.height, 1],
-            dimension: "2d",
-            format: "depth24plus-stencil8", // Format
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-        }
-
-        this.depthTexture = this.device.createTexture(depthTextureDesc);
-        this.depthTextureView = this.depthTexture.createView();
-
         console.log("Engine Loaded");
-        this.onload();
-
     }
     
-    RenderPass = async () => {
-        // Acquire next image from context
-        this.colorTexture = this.context.getCurrentTexture();
-        this.colorTextureView = this.colorTexture.createView();
+    RenderPass = async (pipeline) => {
+        this.commandEncoder = this.device.createCommandEncoder();
         
-        // Since the commands we want to sent to the GPU are related to rendering,
-        // (Clearing Canvas) we want to use this encoder to begin a render pass
-        // Call the render pass, which defines the textures that reveive the output of any drawing commands.
-        const renderPass = this.commandEncoder.beginRenderPass({// Returns a texture with a pixel width and height matching the canvas's attributes and the same format as above
+        // Create a render pass to render to the canvas
+        this.renderPass = this.commandEncoder.beginRenderPass({
             colorAttachments: [{
-                view: this.colorTextureView/* Render Passes require a GPUTextureView instead of GPUTexture *//* Since no Arguments, Indicates want render pass to use entire texture */,
-                // We have to specify what we want the render pas to do with the texture when it starts and ends
-                loadOp: "clear", //Indicates want texture to be cleared on start
-                clearValue: [0,0,0,1], // r, g, b, a
-                storeOp: "store" // Indicates that once the render pass completes, the results of the drawing during the render pass, gets saved into the texture
-            }],
-            depthStencilAttachment: {
-                view: this.depthTextureView,
-                depthClearValue: 1,
-                depthLoadOp: "clear",
-                depthStoreOp: "store",
-                stencilClearValue: 0,
-                stencilLoadOp: "clear",
-                stencilStoreOp: "store",
-            },
-        }) 
+                view: this.context.getCurrentTexture().createView(), // The texture we are going to render to
+                loadOp: "clear", // Clear Color
+                clearValue: [1, 1, 1, 1 ], // New line
+                storeOp: "store" // Store the result of the render pass in the texture
+            }]
+        });
 
-        renderPass.setPipeline(this.pipeline); // Shaders that are used ect.
-        renderPass.setVertexBuffer(0, this.vertexBuffer); // 0th element in the vertex.buffers definition
-        renderPass.setViewport(0, 0, this.canvas.width, this.canvas.height, 0, 1); // Don't know what this one does, but is inferred to change viewport position and size
-        renderPass.setScissorRect(0, 0, this.canvas.width, this.canvas.height); // Don't know what these do, could do more research
+        this.renderPass.setPipeline(pipeline); // Set the pipeline to be used in the render pass
 
+        this.renderPass.setViewport(0, 0, this.canvas.width, this.canvas.height, 0, 1); // Set the viewport to be used in the render pass
+        this.renderPass.setScissorRect(0, 0, this.canvas.width, this.canvas.height); // Set the scissor rect to be used in the render pass
+
+        this.bindGroups.forEach(bind => {
+            this.renderPass.setBindGroup(/* Group */bind.shaderBind, bind.bindGroup); // Set the bind group to be used in the render pass
+        });
+
+        this.vertexBuffers.forEach(vertexBuffer => {
+            this.renderPass.setVertexBuffer(0, vertexBuffer.buffer); // Set the vertex buffer to be used in the render pass
+            this.renderPass.draw(vertexBuffer.buffer.size/vertexBuffer.layout.arrayStride, vertexBuffer.instances); // Draw the vertices in the vertex buffer
+        });
+
+        this.renderPass.end()
+
+
+        this.device.queue.submit([this.commandEncoder.finish()]); // Submit the command buffer to the GPU queue
+    
         
-
-        renderPass.draw(vertices.length/2, GRID_SIZE * GRID_SIZE); // 6 vertices. The second argument is how many instances
-        renderPass.end(); // Ends the render pass
-        // Note that making these calls to the methods do not instruct the GPU to enact, their just recording commands
-
-        const commandBuffer = this.commandEncoder.finish() // Create a GPUCommandBuffer which is an opauqe handle to the recorded commands.
-        this.device.queue.submit([commandBuffer]); // Submit the GPUCommandBuffer to the GPU, the .submit() method takes in an array of commandBuffers
-        // Usually are merged above because the commandBuffer can not be used again.
     }
 
 }
