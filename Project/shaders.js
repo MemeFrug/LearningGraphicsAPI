@@ -16,9 +16,9 @@ struct Input {
 fn vertMain(input: Input) -> Output {
     var vs_out: Output;
     // Set the position of the vertex
-    vs_out.position = vec4<f32>(input.vertexPos+objPosition, 0.0, 1.0);
+    vs_out.position = vec4<f32>(input.vertexPos+objPosition, 0, 3);
     // Set the color of the vertex
-    vs_out.color = vec3<f32>(1.0, 0.0, 0.0);
+    vs_out.color = vec3<f32>(0.0, 0.0, 0.0);
     return vs_out;
 }
 

@@ -11,6 +11,7 @@ class Engine {
         this.shaderCodeModule = null;
 
         this.renderPass = null;
+        this.viewTexture = null;
 
         this.bindGroups = [
             
@@ -19,6 +20,11 @@ class Engine {
         this.vertexBuffers = [
 
         ];
+
+        this.desiredCanvasSize = {
+            width: null,
+            height: null,
+        };
     }
 
     createVertexBuffer = (vertices, bufferLayout = null, label = "Buffer"+this.vertexBuffers.length, instances=1) => {
@@ -59,7 +65,7 @@ class Engine {
         this.bindGroups.push({bindGroup: GPUbindGroup, shaderBind: shaderBind}); // Set the bind group to be used in the render pass
     }
 
-    createPipeline = (vertexModule, fragmentModule, vertexBufferLayout) => {
+    createPipeline = (vertexModule, fragmentModule, vertexBufferLayouts) => {
         console.log("Creating Pipeline");
         // Create a pipeline to hold the shaders and the vertex buffers
         const pipeline = this.device.createRenderPipeline({
@@ -69,7 +75,7 @@ class Engine {
             vertex: {
                 module: vertexModule,
                 entryPoint: "vertMain",
-                buffers: [vertexBufferLayout], // The layout of the vertex buffer
+                buffers: vertexBufferLayouts, // The layout of the vertex buffer
             },
             fragment: {
                 module: fragmentModule,
@@ -97,8 +103,8 @@ class Engine {
     ApplyCanvas = (canvas, width = 1920, height = 1080) => {
         console.log("Applying Canvas");
         //Initialise the canvas
-        canvas.width=width;
-        canvas.height=height;
+        this.desiredCanvasSize.width = width;
+        this.desiredCanvasSize.height = height;
         this.canvas = canvas;
 
         //Get the canvas
@@ -112,19 +118,19 @@ class Engine {
 
         const observer = new ResizeObserver(entries => {
             for (const entry of entries) {
+                if (entry.target != this.canvas) {continue;}
               const width = entry.devicePixelContentBoxSize?.[0].inlineSize ||
                             entry.contentBoxSize[0].inlineSize * devicePixelRatio;
               const height = entry.devicePixelContentBoxSize?.[0].blockSize ||
                              entry.contentBoxSize[0].blockSize * devicePixelRatio;
-              const canvasTarget = entry.target;
-              canvasTarget.width = Math.max(1, Math.min(width, this.device.limits.maxTextureDimension2D));
-              canvasTarget.height = Math.max(1, Math.min(height, this.device.limits.maxTextureDimension2D));
+              this.desiredCanvasSize.width = Math.max(1, Math.min(width, this.device.limits.maxTextureDimension2D));
+              this.desiredCanvasSize.height = Math.max(1, Math.min(height, this.device.limits.maxTextureDimension2D));
             }
           });
           try { // To ensure that the observer works in all browsers
-            observer.observe(canvas, { box: 'device-pixel-content-box' });
+            observer.observe(this.canvas, { box: 'device-pixel-content-box' });
           } catch {
-            observer.observe(canvas, { box: 'content-box' });
+            observer.observe(this.canvas, { box: 'content-box' });
           }
     }
 
@@ -146,19 +152,26 @@ class Engine {
         this.device = await adapter.requestDevice(); // More options can be passed here, for req. higher limits for example.
 
         if (this.canvas) {
-            await this.ApplyCanvas(this.canvas);
+            this.ApplyCanvas(this.canvas);
         }
 
         console.log("Engine Loaded");
     }
     
     RenderPass = async (pipeline) => {
+        //Update Canvas
+        if (this.canvas.width !== this.desiredCanvasSize.width || canvas.height !== this.desiredCanvasSize.height) {
+            this.canvas.width = this.desiredCanvasSize.width;
+            this.canvas.height = this.desiredCanvasSize.height;
+        }
+        this.viewTexture = this.context.getCurrentTexture()
+
         this.commandEncoder = this.device.createCommandEncoder();
         
         // Create a render pass to render to the canvas
         this.renderPass = this.commandEncoder.beginRenderPass({
             colorAttachments: [{
-                view: this.context.getCurrentTexture().createView(), // The texture we are going to render to
+                view: this.viewTexture.createView(), // The texture we are going to render to
                 loadOp: "clear", // Clear Color
                 clearValue: [1, 1, 1, 1 ], // New line
                 storeOp: "store" // Store the result of the render pass in the texture
@@ -175,7 +188,7 @@ class Engine {
         });
 
         this.vertexBuffers.forEach(vertexBuffer => {
-            this.renderPass.setVertexBuffer(0, vertexBuffer.buffer); // Set the vertex buffer to be used in the render pass
+            this.renderPass.setVertexBuffer(vertexBuffer.layout.attributes[0].shaderLocation, vertexBuffer.buffer); // Set the vertex buffer to be used in the render pass
             this.renderPass.draw(vertexBuffer.buffer.size/vertexBuffer.layout.arrayStride, vertexBuffer.instances); // Draw the vertices in the vertex buffer
         });
 
