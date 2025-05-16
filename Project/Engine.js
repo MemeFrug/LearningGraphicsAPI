@@ -1,30 +1,20 @@
 export {Engine}
 //Written By Max K
-class Engine {
-    constructor(canvas = null) {
-        this.canvas = canvas;
-        this.context = null;
-        this.canvasFormat = null;
-        this.commandEncoder = null;
-        this.device = null;
+class Object {
+    constructor(pipeline) {
+        this.pipeline = pipeline;
 
-        this.shaderCodeModule = null;
+        this.uniformBuffer = {
 
-        this.renderPass = null;
-        this.viewTexture = null;
+        }
 
-        this.bindGroups = [
-            
-        ];
+        this.bindGroups = {
 
-        this.vertexBuffers = [
+        }
 
-        ];
+        this.vertexBuffers = {
 
-        this.desiredCanvasSize = {
-            width: null,
-            height: null,
-        };
+        }
     }
 
     createVertexBuffer = (vertices, bufferLayout = null, label = "Buffer"+this.vertexBuffers.length, instances=1) => {
@@ -51,12 +41,12 @@ class Engine {
         return {buffer:buffer, updateBuffer: (updateValue) => {this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, updateValue);}};
     }
 
-    createBindGroup = (uniformBuffer, pipeline, shaderGroup = 0, shaderBind) => {
+    createBindGroup = (uniformBuffer, shaderGroup = 0, shaderBind) => {
         console.log("Creating Bind Group");
         // Create a bind group to hold the uniforms and the bind group layout
         const GPUbindGroup = this.device.createBindGroup({
             label: "BindGroup",
-            layout: pipeline.getBindGroupLayout(shaderGroup), // The layout of the bind group, this is the first layout in the pipeline
+            layout: this.pipeline.getBindGroupLayout(shaderGroup), // The layout of the bind group, this is the first layout in the pipeline
             entries: [{
                 binding: shaderBind, // The binding of the uniform buffer in the shader
                 resource: { buffer: uniformBuffer }, // The uniform buffer to be used in the bind group
@@ -64,10 +54,35 @@ class Engine {
         });
         this.bindGroups.push({bindGroup: GPUbindGroup, shaderBind: shaderBind}); // Set the bind group to be used in the render pass
     }
+}
+
+class Engine {
+    constructor(canvas = null) {
+        this.canvas = canvas;
+        this.context = null;
+        this.canvasFormat = null;
+        this.commandEncoder = null;
+        this.device = null;
+
+        this.shaderCodeModule = null;
+
+        this.renderPass = null;
+        this.viewTexture = null;
+
+        this.desiredCanvasSize = {
+            width: null,
+            height: null,
+        };
+
+        this.elements = [ new Object() ]
+    }
+
+    
 
     createPipeline = (vertexModule, fragmentModule, vertexBufferLayouts) => {
         console.log("Creating Pipeline");
         // Create a pipeline to hold the shaders and the vertex buffers
+        console.log(vertexBufferLayouts);
         const pipeline = this.device.createRenderPipeline({
             label: "Pipeline",
             layout: "auto", // The layout of the pipeline, auto will create a new layout for the pipeline
@@ -183,14 +198,18 @@ class Engine {
         this.renderPass.setViewport(0, 0, this.canvas.width, this.canvas.height, 0, 1); // Set the viewport to be used in the render pass
         this.renderPass.setScissorRect(0, 0, this.canvas.width, this.canvas.height); // Set the scissor rect to be used in the render pass
 
+        //Need to create an object list, where each object has a bind and vertex buffers.
+
         this.bindGroups.forEach(bind => {
             this.renderPass.setBindGroup(/* Group */bind.shaderBind, bind.bindGroup); // Set the bind group to be used in the render pass
         });
 
         this.vertexBuffers.forEach(vertexBuffer => {
             this.renderPass.setVertexBuffer(vertexBuffer.layout.attributes[0].shaderLocation, vertexBuffer.buffer); // Set the vertex buffer to be used in the render pass
-            this.renderPass.draw(vertexBuffer.buffer.size/vertexBuffer.layout.arrayStride, vertexBuffer.instances); // Draw the vertices in the vertex buffer
         });
+        
+        // Wrong
+        this.renderPass.draw(vertexBuffer.buffer.size/vertexBuffer.layout.arrayStride, vertexBuffer.instances); // Draw the vertices in the vertex buffer
 
         this.renderPass.end()
 

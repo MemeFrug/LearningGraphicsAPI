@@ -12,6 +12,24 @@ let playerPositionUniformObject = null; // Uniform buffer for the player positio
 
 const collidableObjects = [];
 
+const ElementPositionLayout = {
+    arrayStride: 8,
+    attributes: [{
+        format: "float32x2",
+        offset: 0,
+        shaderLocation: 1, // Position, see vertex shader
+    }],
+}
+
+const ElementVertexCoordinateLayout = {
+                arrayStride: 8,
+                attributes: [{
+                    format: "float32x2",
+                    offset: 0,
+                    shaderLocation: 0, // Position, see vertex shader
+                }],
+}
+
 class Platform {
     constructor(x, y, width, height, collidable) {
         this.position = new Float32Array([x, y]);
@@ -28,16 +46,9 @@ class Platform {
                 width, height,
                 -width, height,
             ]),
-            // layout: {
-            //     arrayStride: 8,
-            //     attributes: [{
-            //         format: "float32x2",
-            //         offset: 0,
-            //         shaderLocation: 0, // Position, see vertex shader
-            //     }],
-            // }
+
         };
-        
+
         this.uniformObject = null;
 
         this.collidable = collidable;
@@ -58,21 +69,13 @@ const player = {
         data: new Float32Array([
             //X,    Y,
             -0.3, -0.5, // Triangle 1
-             0.3, -0.5,
-             0.3,  0.5,
+            0.3, -0.5,
+            0.3, 0.5,
 
             -0.3, -0.5, // Triangle 2
-             0.3,  0.5,
-            -0.3,  0.5,
-        ]),
-        layout: {
-            arrayStride: 8,
-            attributes: [{
-              format: "float32x2",
-              offset: 0,
-              shaderLocation: 0, // Position, see vertex shader
-            }],
-        }
+            0.3, 0.5,
+            -0.3, 0.5,
+        ])
     },
     keyboardEvents: {
         jump: false,
@@ -81,7 +84,7 @@ const player = {
     },
     update: (dt) => {
         if (player.keyboardEvents.jump) {
-            player.jump()            
+            player.jump()
         };
         if (player.keyboardEvents.left) {
             player.velocity[0] -= player.speed * dt;
@@ -98,21 +101,23 @@ const player = {
 const init = async () => {
     await projectEngine.Instantiate();
     projectEngine.ApplyCanvas(document.getElementById("canvas"), 1920, 1080);
-    projectEngine.createVertexBuffer(player.vertices.data, player.vertices.layout, "PlayerVertices");
+    projectEngine.createVertexBuffer(player.vertices.data, ElementVertexCoordinateLayout, "PlayerVertices");
+    projectEngine.createVertexBuffer(player.position, ElementPositionLayout, "PlayerPosition");
     const shaderModule = projectEngine.getShaderModule(shaderCode);
 
     //Platform
-    let platform = new Platform(-1,-1,10,1,true)
-    projectEngine.createVertexBuffer(platform.vertices.data, player.vertices.layout, "PlatformVertices")
+    let platform = new Platform(-1, -30, 1, 1, true)
+    projectEngine.createVertexBuffer(platform.vertices.data, ElementVertexCoordinateLayout, "PlatformVertices")
+    projectEngine.createVertexBuffer(platform.position, ElementPositionLayout, "PlatformPosition")
     // platform.uniformObject = projectEngine.createUniformBuffer(platform.position, "Platform1Uniform")
     // projectEngine.createBindGroup(platform.uniformObject.buffer, pipeline, 0, 0); // Bind group for player position
-    // platform.init()
+    platform.init()
 
-    pipeline = projectEngine.createPipeline(shaderModule, shaderModule, [player.vertices.layout]); // Create the pipeline
+    pipeline = projectEngine.createPipeline(shaderModule, shaderModule, [ElementVertexCoordinateLayout, ElementPositionLayout]); // Create the pipeline
 
     // Player
-    playerPositionUniformObject = projectEngine.createUniformBuffer(player.position, "PlayerUniforms");
-    projectEngine.createBindGroup(playerPositionUniformObject.buffer, pipeline, 0, 0); // Bind group for player position
+    // playerPositionUniformObject = projectEngine.createUniformBuffer(player.position, "PlayerUniforms");
+    // projectEngine.createBindGroup(playerPositionUniformObject.buffer, pipeline, 0, 0); // Bind group for player position
 
     requestAnimationFrame(update);
 };
@@ -134,7 +139,7 @@ const update = (timeElapsed) => {
     // });
 
     //Update player position
-    playerPositionUniformObject.updateBuffer(player.position); // Update the player position uniform buffer
+    // playerPositionUniformObject.updateBuffer(player.position); // Update the player position uniform buffer
     projectEngine.RenderPass(pipeline);
     requestAnimationFrame(update);
 };
