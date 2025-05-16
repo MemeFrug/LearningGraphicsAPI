@@ -1,4 +1,4 @@
-import { Engine } from "./Engine.js";
+import { Engine, EngineElement } from "./Engine.js";
 import { shaderCode } from "./shaders.js";
 
 // Written by Max K
@@ -8,31 +8,24 @@ const Gravity = 9.8;
 const projectEngine = new Engine(); // Instantiates on Load
 
 let pipeline = null; // Pipeline for the player
-let playerPositionUniformObject = null; // Uniform buffer for the player position
 
 const collidableObjects = [];
 
-const ElementPositionLayout = {
-    arrayStride: 8,
-    attributes: [{
-        format: "float32x2",
-        offset: 0,
-        shaderLocation: 1, // Position, see vertex shader
-    }],
-}
+const bufferUpdate = [];
 
 const ElementVertexCoordinateLayout = {
-                arrayStride: 8,
-                attributes: [{
-                    format: "float32x2",
-                    offset: 0,
-                    shaderLocation: 0, // Position, see vertex shader
-                }],
-}
+  arrayStride: 8,
+  attributes: [{
+      format: "float32x2",
+      offset: 0,
+      shaderLocation: 0 // Position, see vertex shader
+    }]
+};
 
-class Platform {
-    constructor(x, y, width, height, collidable) {
-        this.position = new Float32Array([x, y]);
+class Platform extends EngineElement {
+    constructor(pipeline, device, width, height, collidable) {
+        super(pipeline, device);
+        this.position = new Float32Array([0.0, 0.0]);
         this.width = width;
         this.height = height;
         this.vertices = {
@@ -50,7 +43,7 @@ class Platform {
         };
 
         this.uniformObject = null;
-
+        this.static = true; // Static object
         this.collidable = collidable;
     }
 
@@ -61,11 +54,15 @@ class Platform {
     }
 }
 
-const player = {
-    speed: 0.01,// Player speed
-    position: new Float32Array([0.0, 0.0]), // Player position
-    velocity: new Float32Array([0.0, 0.0]), // Player velocity
-    vertices: {
+let player = null; // Player object
+class Player extends EngineElement {
+    constructor(pipeline, device) {
+        super(pipeline, device);
+        this.position = new Float32Array([0.0, 0.0]);
+        this.velocity = new Float32Array([0.0, 0.0]);
+    }
+    speed = 0.1// Player speed
+    vertices = {
         data: new Float32Array([
             //X,    Y,
             -0.3, -0.5, // Triangle 1
@@ -76,49 +73,71 @@ const player = {
             0.3, 0.5,
             -0.3, 0.5,
         ])
-    },
-    keyboardEvents: {
+    }
+    keyboardEvents = {
         jump: false,
+        drop: false,
         left: false,
         right: false,
-    },
-    update: (dt) => {
+    }
+    update = (dt) => {
         if (player.keyboardEvents.jump) {
             player.jump()
+            player.velocity[1] += (player.speed + player.velocity[1] * dt) * 0.01;
+        };
+        if (player.keyboardEvents.drop) {
+            player.velocity[1] -= (player.speed - player.velocity[1] * dt) * 0.01;
         };
         if (player.keyboardEvents.left) {
-            player.velocity[0] -= player.speed * dt;
+            player.velocity[0] -= (player.speed - player.velocity[0] * dt) * 0.01 ;
         };
         if (player.keyboardEvents.right) {
-            player.velocity[0] += player.speed * dt;
+            player.velocity[0] += (player.speed + player.velocity[0] * dt) * 0.01;
         };
-    },
-    jump: () => {
+    }
+    jump = () => {
         return;
     }
 }
 
 const init = async () => {
     await projectEngine.Instantiate();
-    projectEngine.ApplyCanvas(document.getElementById("canvas"), 1920, 1080);
-    projectEngine.createVertexBuffer(player.vertices.data, ElementVertexCoordinateLayout, "PlayerVertices");
-    projectEngine.createVertexBuffer(player.position, ElementPositionLayout, "PlayerPosition");
+
     const shaderModule = projectEngine.getShaderModule(shaderCode);
-
-    //Platform
-    let platform = new Platform(-1, -30, 1, 1, true)
-    projectEngine.createVertexBuffer(platform.vertices.data, ElementVertexCoordinateLayout, "PlatformVertices")
-    projectEngine.createVertexBuffer(platform.position, ElementPositionLayout, "PlatformPosition")
-    // platform.uniformObject = projectEngine.createUniformBuffer(platform.position, "Platform1Uniform")
-    // projectEngine.createBindGroup(platform.uniformObject.buffer, pipeline, 0, 0); // Bind group for player position
-    platform.init()
-
-    pipeline = projectEngine.createPipeline(shaderModule, shaderModule, [ElementVertexCoordinateLayout, ElementPositionLayout]); // Create the pipeline
+    projectEngine.ApplyCanvas(document.getElementById("canvas"), 1920, 1080);
+    pipeline = projectEngine.createPipeline(shaderModule, shaderModule, [ElementVertexCoordinateLayout]); // Create the pipeline
 
     // Player
-    // playerPositionUniformObject = projectEngine.createUniformBuffer(player.position, "PlayerUniforms");
-    // projectEngine.createBindGroup(playerPositionUniformObject.buffer, pipeline, 0, 0); // Bind group for player position
+    player = new Player(pipeline, projectEngine.device); // Create the player object
+    player.createVertexBuffer(player.vertices.data, ElementVertexCoordinateLayout, "PlayerVertices");
+    const playerPositionUniformBuffer = player.createUniformBuffer(player.position, "PlayerPosition");
+    player.createBindGroup(1 /* Shader Group */, [{ // Each binding in the bind group
+        binding: 0, // The binding of the uniform buffer in the shader
+        resource: {buffer: playerPositionUniformBuffer.buffer}
+    }]); // Create the bind group for the player
 
+    bufferUpdate.push({ // Add the player to the buffer update list
+        position: player.position,
+        uniformObject: playerPositionUniformBuffer
+    });
+    projectEngine.newElement(player); // Add the player to the engine
+
+    //Platform
+    let platform = new Platform(pipeline, projectEngine.device, 1, 1, true)
+    platform.position = new Float32Array([1.0, -3.0]);
+
+    platform.createVertexBuffer(platform.vertices.data, ElementVertexCoordinateLayout, "PlatformVertices")
+    const platformPositionUniformBuffer = platform.createUniformBuffer(platform.position, "PlatformPosition");
+    platform.createBindGroup(1 /* Shader Group */, [{ // Each binding in the bind group
+        binding: 0, // The binding of the uniform buffer in the shader
+        resource: {buffer: platformPositionUniformBuffer.buffer}
+    }]); // Create the bind group for the platform
+    bufferUpdate.push({ // Add the platform to the buffer update list
+        position: platform.position,
+        uniformObject: platformPositionUniformBuffer
+    });
+    projectEngine.newElement(platform); // Add the platform to the engine
+    platform.init()
     requestAnimationFrame(update);
 };
 
@@ -126,21 +145,32 @@ let lastTime = undefined
 const update = (timeElapsed) => {
     const dt = timeElapsed - lastTime
     lastTime = timeElapsed
-    player.update(dt);
+    player.update(dt); // Update player position based on keyboard events
 
-    // player.velocity[1] += (player.velocity[1] - Gravity) * 0.00001; // Apply gravity to player position
+    // player.velocity[1] += (player.velocity[1] - Gravity) * 0.0001; // Apply gravity to player position
+    player.velocity[1] = Math.min(player.velocity[1], Gravity) * 0.9; // Limit player velocity
     player.position[1] += player.velocity[1]; // Update player position
-    player.velocity[0] = player.velocity[0] * 0.1; // Bring it towrads 0
+    player.velocity[0] = player.velocity[0] * 0.9; // Bring it towards 0
     player.position[0] += player.velocity[0];
 
     //Update platform positions
-    // collidableObjects.forEach(platform => {
-    //     platform.uniformObject.updateBuffer(platform.position); // Update platform position
-    // });
+    collidableObjects.forEach(platform => {
+        const collision = projectEngine.checkRectangularCollision(player, platform);
+        if (collision) {
+            // player.velocity[1] = 0; // Reset player velocity
+            projectEngine.resolveCollision(player, platform, collision);
+        }
+    });
+
+    // Let the GPU know that the position of the player has changed
+    bufferUpdate.forEach(buffer => {
+        buffer.uniformObject.updateBuffer(buffer.position); // Update the uniform object with the new position
+    });
 
     //Update player position
     // playerPositionUniformObject.updateBuffer(player.position); // Update the player position uniform buffer
     projectEngine.RenderPass(pipeline);
+
     requestAnimationFrame(update);
 };
 
@@ -149,6 +179,9 @@ window.addEventListener("keydown", (event) => {
     switch (event.code) {
         case "KeyW":
             player.keyboardEvents.jump = true;
+            break;
+        case "KeyS":
+            player.keyboardEvents.drop = true;
             break;
         case "Space":
             player.keyboardEvents.jump = true;
@@ -172,6 +205,9 @@ window.addEventListener("keyup", (event) => {
         case "Space":
             player.keyboardEvents.jump = false;
             break;
+        case "KeyS":
+            player.keyboardEvents.drop = false;
+            break;
         case "KeyA":
             player.keyboardEvents.left = false;
             break;
@@ -184,6 +220,7 @@ window.addEventListener("keyup", (event) => {
     };
 });
 
-window.player = player; // Expose player to the console for debugging
 window.projectEngine = projectEngine; // Expose projectEngine to the console for debugging
 window.onload = init;
+window.player = player; // Expose player to the console for debugging
+window.Player = Player; // Expose player to the console for debugging

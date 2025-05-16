@@ -1,23 +1,39 @@
-export {Engine}
+export {Engine, EngineElement};
 //Written By Max K
-class Object {
-    constructor(pipeline) {
+class EngineElement {
+    constructor(pipeline, device) {
         this.pipeline = pipeline;
+        this.device = device;
+        this.uniformBuffers = [];
 
-        this.uniformBuffer = {
+        this.vertexBuffer = null;
 
-        }
-
-        this.bindGroups = {
-
-        }
-
-        this.vertexBuffers = {
-
-        }
+        this.bindGroups = [];
     }
 
-    createVertexBuffer = (vertices, bufferLayout = null, label = "Buffer"+this.vertexBuffers.length, instances=1) => {
+    getBoundingBox = (vertices, position) => {
+        let minX = Number.POSITIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+
+        for (let i = 0; i < vertices.length; i += 2) {
+            const x = vertices[i];
+            const y = vertices[i + 1];
+            const worldX = position[0] + x;
+            const worldY = position[1] + y;
+            minX = Math.min(minX, worldX);
+            maxX = Math.max(maxX, worldX);
+            minY = Math.min(minY, worldY);
+            maxY = Math.max(maxY, worldY);
+        }
+
+
+        // Return the bounding box of the vertices
+        return { minX, minY, maxX, maxY, center: {x: (minX + maxX) / 2, y: (minY + maxY) / 2}};
+    }
+
+    createVertexBuffer = (vertices, bufferLayout = null, label = "CreatedBuffer", instances=1) => {
         console.log("Creating Vertex Buffer");
         // Create a vertex buffer to hold the vertices
         const buffer = this.device.createBuffer({
@@ -25,8 +41,10 @@ class Object {
             size: vertices.byteLength,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         })
-        this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, vertices); // Write the vertices to the buffer
-        this.vertexBuffers.push({buffer: buffer, layout: bufferLayout, instances: instances}); // Add the buffer to the list of vertex buffers
+
+        const vertexBuffer = {buffer: buffer, layout: bufferLayout, instances: instances, updateBuffer: (updatedVertices) => {this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, updatedVertices);}}; // Create a vertex buffer to hold the vertices
+        vertexBuffer.updateBuffer(vertices); // Write the vertices to the buffer
+        this.vertexBuffer = vertexBuffer; // Add the buffer to the list of vertex buffers
     }
 
     createUniformBuffer = (data, label = "UniformBuffer"+this.vertexBuffers.length) => {
@@ -37,22 +55,28 @@ class Object {
             size: data.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         })
-        this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, data); // Write the uniforms to the buffer
-        return {buffer:buffer, updateBuffer: (updateValue) => {this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, updateValue);}};
+        
+        const uniformBuffer = {buffer: buffer, updateBuffer: (updateValue) => {this.device.queue.writeBuffer(buffer, /*Buffer Offset*/0, updateValue);}}; // Create a uniform buffer to hold the uniforms
+        this.uniformBuffers.push(uniformBuffer); // Add the buffer to the list of uniform buffers
+        this.device.queue.writeBuffer(uniformBuffer.buffer, /*Buffer Offset*/0, data); // Write the uniforms to the buffer
+        return uniformBuffer; // Return the uniform buffer
     }
 
-    createBindGroup = (uniformBuffer, shaderGroup = 0, shaderBind) => {
+    createBindGroup = (shaderGroup, entries = [/* Format shown below */]) => {
         console.log("Creating Bind Group");
         // Create a bind group to hold the uniforms and the bind group layout
         const GPUbindGroup = this.device.createBindGroup({
             label: "BindGroup",
             layout: this.pipeline.getBindGroupLayout(shaderGroup), // The layout of the bind group, this is the first layout in the pipeline
-            entries: [{
-                binding: shaderBind, // The binding of the uniform buffer in the shader
-                resource: { buffer: uniformBuffer }, // The uniform buffer to be used in the bind group
-            }],
+            entries: entries,
+            // [ 
+                //     {
+                //     binding: shaderBind, // The binding of the uniform buffer in the shader
+                //     resource: { buffer: buffer }, // The uniform buffer to be used in the bind group
+                // }
+            // ],
         });
-        this.bindGroups.push({bindGroup: GPUbindGroup, shaderBind: shaderBind}); // Set the bind group to be used in the render pass
+        this.bindGroups.push({bindGroup: GPUbindGroup, shaderBind: shaderGroup}); // Set the bind group to be used in the render pass
     }
 }
 
@@ -74,15 +98,87 @@ class Engine {
             height: null,
         };
 
-        this.elements = [ new Object() ]
+        this.elements = [];
     }
 
-    
+    checkRectangularCollision = (rect1, rect2) => {
+        const a = rect1.getBoundingBox(rect1.vertices.data, rect1.position);
+        const b = rect2.getBoundingBox(rect2.vertices.data, rect2.position);
+        // Early exit if no collision
+        if (a.maxX < b.minX || a.minX > b.maxX || a.maxY < b.minY || a.minY > b.maxY) {
+            return null;
+        }
+
+        // Calculate overlaps for all four sides
+        const overlaps = {
+            left: a.maxX - b.minX,   // Overlap on rectB's left side
+            right: b.maxX - a.minX,  // Overlap on rectB's right side
+            bottom: a.maxY - b.minY, // Overlap on rectB's bottom side (Y↑: rectA is below rectB)
+            top: b.maxY - a.minY     // Overlap on rectB's top side (Y↑: rectA is above rectB)
+        };
+
+        // Find the smallest positive overlap (ignore negative values)
+        let minOverlap = Infinity;
+        let collisionSide = null;
+        for (const [side, value] of Object.entries(overlaps)) {
+            if (value > 0 && value < minOverlap) {
+            minOverlap = value;
+            collisionSide = side;
+            }
+        }
+
+        if (!collisionSide) return null;
+
+        // Determine axis and direction based on collision side
+        let axis, direction;
+        switch (collisionSide) {
+            case 'left':
+            axis = 'x';
+            direction = -1;
+            break;
+            case 'right':
+            axis = 'x';
+            direction = 1; 
+            break;
+            case 'bottom':
+            axis = 'y';
+            direction = -1;
+            break;
+            case 'top':
+            axis = 'y';
+            direction = 1; 
+            break;
+        }
+
+        return { axis, overlap: minOverlap, direction };
+    }
+
+    resolveCollision = (rect1, rect2, mtv) => {
+        const move = mtv.direction * mtv.overlap; //Move each rect half the distance of the overlap
+        
+        const rect1Static = rect1.static;
+        const rect2Static = rect2.static;
+        if (rect1Static && rect2Static) return; // Both are static, no movement
+        const axis = mtv.axis === 'x' ? 0 : 1;
+        if (rect1Static) {
+            rect2.position[axis] += move; // Move the dynamic rect
+        } else if (rect2Static) {
+            // console.log(rect1.position[axis]);
+            rect1.position[axis] += move; // Move the dynamic rect
+        } else {
+            rect1.position[axis] -= move / 2; // Move both rectangles
+            rect2.position[axis] += move / 2;
+        }
+    }
+
+    newElement = (newElement= new Object(this)) => {
+        this.elements.push(newElement);
+        return newElement;
+    }
 
     createPipeline = (vertexModule, fragmentModule, vertexBufferLayouts) => {
         console.log("Creating Pipeline");
         // Create a pipeline to hold the shaders and the vertex buffers
-        console.log(vertexBufferLayouts);
         const pipeline = this.device.createRenderPipeline({
             label: "Pipeline",
             layout: "auto", // The layout of the pipeline, auto will create a new layout for the pipeline
@@ -199,20 +295,20 @@ class Engine {
         this.renderPass.setScissorRect(0, 0, this.canvas.width, this.canvas.height); // Set the scissor rect to be used in the render pass
 
         //Need to create an object list, where each object has a bind and vertex buffers.
+        this.elements.forEach(element => {
+            if (element.vertexBuffer == null) {return;} // If the element has no vertex buffer, skip it
 
-        this.bindGroups.forEach(bind => {
-            this.renderPass.setBindGroup(/* Group */bind.shaderBind, bind.bindGroup); // Set the bind group to be used in the render pass
-        });
+            element.bindGroups.forEach(bind => {
+                this.renderPass.setBindGroup(/* Group */bind.shaderBind, bind.bindGroup); // Set the bind group to be used in the render pass
+            });
 
-        this.vertexBuffers.forEach(vertexBuffer => {
-            this.renderPass.setVertexBuffer(vertexBuffer.layout.attributes[0].shaderLocation, vertexBuffer.buffer); // Set the vertex buffer to be used in the render pass
+            this.renderPass.setVertexBuffer(0, element.vertexBuffer.buffer); // Set the vertex buffer to be used in the render pass
+            
+            this.renderPass.draw(element.vertexBuffer.buffer.size/element.vertexBuffer.layout.arrayStride, element.vertexBuffer.instances); // Draw the vertices in the vertex buffer
+
         });
-        
-        // Wrong
-        this.renderPass.draw(vertexBuffer.buffer.size/vertexBuffer.layout.arrayStride, vertexBuffer.instances); // Draw the vertices in the vertex buffer
 
         this.renderPass.end()
-
 
         this.device.queue.submit([this.commandEncoder.finish()]); // Submit the command buffer to the GPU queue
     
