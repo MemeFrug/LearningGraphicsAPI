@@ -255,6 +255,18 @@ window.addEventListener("keydown", (event) => {
         case "KeyD":
             player.keyboardEvents.right = true;
             break;
+        case "ArrowLeft":
+            player.keyboardEvents.left = true;
+            break;
+        case "ArrowRight":
+            player.keyboardEvents.right = true;
+            break;
+        case "ArrowUp":
+            player.keyboardEvents.jump = true;
+            break;
+        case "ArrowDown":
+            player.keyboardEvents.drop = true;
+            break;
 
         default:
             break;
@@ -276,6 +288,18 @@ window.addEventListener("keyup", (event) => {
             break;
         case "KeyD":
             player.keyboardEvents.right = false;
+            break;
+        case "ArrowLeft":
+            player.keyboardEvents.left = false;
+            break;
+        case "ArrowRight":
+            player.keyboardEvents.right = false;
+            break;
+        case "ArrowUp":
+            player.keyboardEvents.jump = false;
+            break;
+        case "ArrowDown":
+            player.keyboardEvents.drop = false;
             break;
 
         default:
