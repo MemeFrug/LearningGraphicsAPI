@@ -1,4 +1,5 @@
 export {Engine, EngineElement};
+
 //Written By Max K
 class EngineElement {
     constructor(pipeline, device) {
@@ -34,7 +35,7 @@ class EngineElement {
     }
 
     createVertexBuffer = (vertices, bufferLayout = null, label = "CreatedBuffer", instances=1) => {
-        console.log("Creating Vertex Buffer");
+        console.log("Creating Vertex Buffer", label);
         // Create a vertex buffer to hold the vertices
         const buffer = this.device.createBuffer({
             label: label,
@@ -48,7 +49,7 @@ class EngineElement {
     }
 
     createUniformBuffer = (data, label = "UniformBuffer"+this.vertexBuffers.length) => {
-        console.log("Creating Uniform Buffer");
+        console.log("Creating UniformBuffer", label);
         // Create a uniform buffer to hold the uniforms
         const buffer = this.device.createBuffer({
             label: label,
@@ -70,13 +71,13 @@ class EngineElement {
             layout: this.pipeline.getBindGroupLayout(shaderGroup), // The layout of the bind group, this is the first layout in the pipeline
             entries: entries,
             // [ 
-                //     {
+                // {
                 //     binding: shaderBind, // The binding of the uniform buffer in the shader
                 //     resource: { buffer: buffer }, // The uniform buffer to be used in the bind group
                 // }
             // ],
         });
-        this.bindGroups.push({bindGroup: GPUbindGroup, shaderBind: shaderGroup}); // Set the bind group to be used in the render pass
+        return {bindGroup: GPUbindGroup, shaderBind: shaderGroup}; // Return the bind group
     }
 }
 
@@ -97,6 +98,8 @@ class Engine {
             width: null,
             height: null,
         };
+
+        this.cameraElement = null;
 
         this.elements = [];
     }
@@ -214,9 +217,9 @@ class Engine {
     ApplyCanvas = (canvas, width = 1920, height = 1080) => {
         console.log("Applying Canvas");
         //Initialise the canvas
-        this.desiredCanvasSize.width = width;
-        this.desiredCanvasSize.height = height;
         this.canvas = canvas;
+        this.canvas.width = width;
+        this.canvas.height = height;
 
         //Get the canvas
         this.context = canvas.getContext("webgpu");
@@ -226,23 +229,6 @@ class Engine {
             device: this.device, // What device im going to use the context with
             format: this.canvasFormat // The texture format the context should use
         });
-
-        const observer = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                if (entry.target != this.canvas) {continue;}
-              const width = entry.devicePixelContentBoxSize?.[0].inlineSize ||
-                            entry.contentBoxSize[0].inlineSize * devicePixelRatio;
-              const height = entry.devicePixelContentBoxSize?.[0].blockSize ||
-                             entry.contentBoxSize[0].blockSize * devicePixelRatio;
-              this.desiredCanvasSize.width = Math.max(1, Math.min(width, this.device.limits.maxTextureDimension2D));
-              this.desiredCanvasSize.height = Math.max(1, Math.min(height, this.device.limits.maxTextureDimension2D));
-            }
-          });
-          try { // To ensure that the observer works in all browsers
-            observer.observe(this.canvas, { box: 'device-pixel-content-box' });
-          } catch {
-            observer.observe(this.canvas, { box: 'content-box' });
-          }
     }
 
     Instantiate = async () => {
@@ -268,13 +254,8 @@ class Engine {
 
         console.log("Engine Loaded");
     }
-    
-    RenderPass = async (pipeline) => {
-        //Update Canvas
-        if (this.canvas.width !== this.desiredCanvasSize.width || canvas.height !== this.desiredCanvasSize.height) {
-            this.canvas.width = this.desiredCanvasSize.width;
-            this.canvas.height = this.desiredCanvasSize.height;
-        }
+
+    RenderPass = async (pipeline, camera) => {
         this.viewTexture = this.context.getCurrentTexture()
 
         this.commandEncoder = this.device.createCommandEncoder();
@@ -297,6 +278,8 @@ class Engine {
         //Need to create an object list, where each object has a bind and vertex buffers.
         this.elements.forEach(element => {
             if (element.vertexBuffer == null) {return;} // If the element has no vertex buffer, skip it
+            
+            this.renderPass.setBindGroup(0, camera.bindGroups[0].bindGroup); // Set the bind group to be used in the render pass
 
             element.bindGroups.forEach(bind => {
                 this.renderPass.setBindGroup(/* Group */bind.shaderBind, bind.bindGroup); // Set the bind group to be used in the render pass

@@ -1,6 +1,7 @@
 export { shaderCode };
 
 const shaderCode = /* wgsl */`
+@group(0) @binding(0) var<uniform> cameraPosition: vec2f;
 @group(1) @binding(0) var<uniform> objPosition: vec2f;
 
 struct Output {
@@ -15,7 +16,7 @@ struct Input {
 fn vertMain(input: Input) -> Output {
     var vs_out: Output;
     // Set the position of the vertex
-    vs_out.position = vec4<f32>(input.vertexPos+objPosition, 0, 5);
+    vs_out.position = vec4<f32>(input.vertexPos+objPosition+cameraPosition, 0, 5);
     // Set the color of the vertex
     vs_out.color = vec3<f32>(0.0, 0.0, 0.0);
     return vs_out;
