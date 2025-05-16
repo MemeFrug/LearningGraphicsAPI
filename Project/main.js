@@ -222,8 +222,8 @@ const update = (timeElapsed) => {
     });
 
     // Update Camera Position
-    camera.position[0] = -player.position[0] - 2; // Set the camera position to the player position
-    camera.position[1] = -player.position[1]/3; // Set the camera position to the player position
+    camera.position[0] += ((-player.position[0] - 2) - camera.position[0]) * 0.07; // Set the camera position to the player position
+    camera.position[1] += ((-player.position[1]/3) - camera.position[1]) * 0.2; // Set the camera position to the player position
 
     // Let the GPU know that the position of the player has changed
     bufferUpdate.forEach(buffer => {
