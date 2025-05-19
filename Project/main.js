@@ -4,6 +4,11 @@ import { shaderCode } from "./shaders.js";
 // Written by Max K
 console.log("main.js loaded");
 
+//UI Elements
+const FPSElement = document.getElementById("fps-text");
+const PlayerYVelocityElement = document.getElementById("player-vy-text");
+const PlayerXVelocityElement = document.getElementById("player-vx-text");
+
 const Gravity = -0.1;
 const projectEngine = new Engine(); // Instantiates on Load
 
@@ -62,8 +67,8 @@ class Player extends EngineElement {
         this.velocity = new Float32Array([0.0, 0.0]);
     }
     canJump = false; // Can jump
-    jumpHeight = 0.11; // Jump height
-    speed = 0.06; // Player speed
+    jumpHeight = 0.007; // Jump height
+    speed = 0.055; // Player speed
     vertices = {
         data: new Float32Array([
             //X,    Y,
@@ -101,7 +106,7 @@ class Player extends EngineElement {
     }
     jump = (dt) => {
         if (player.canJump) {
-            player.velocity[1] = player.jumpHeight * dt * 0.1;
+            player.velocity[1] = player.jumpHeight * dt;
             player.canJump = false; // Reset jump
         }
         return;
@@ -206,7 +211,7 @@ const update = (timeElapsed) => {
     player.velocity[1] += Gravity * dt * 0.002; // Apply gravity to player position
     player.velocity[1] = Math.max(-0.2, player.velocity[1]); // Limit the velocity to a minimum of 0.2
     player.position[1] += player.velocity[1]; // Update player position
-    player.velocity[0] = player.velocity[0] * 0.9; // Bring it towards 0
+    player.velocity[0] = player.velocity[0] * dt * 0.0515; // Bring it towards 0
     player.position[0] += player.velocity[0];
 
     //Update platform positions
@@ -224,6 +229,11 @@ const update = (timeElapsed) => {
     // Update Camera Position
     camera.position[0] += ((-player.position[0] - 2) - camera.position[0]) * 0.07; // Set the camera position to the player position
     camera.position[1] += ((-player.position[1]/3) - camera.position[1]) * 0.2; // Set the camera position to the player position
+
+    //Update UI
+    FPSElement.textContent = Math.round(1000/dt);
+    PlayerXVelocityElement.textContent = Math.round(player.velocity[0]*1000);
+    PlayerYVelocityElement.textContent = Math.round(player.velocity[1]*1000);
 
     // Let the GPU know that the position of the player has changed
     bufferUpdate.forEach(buffer => {

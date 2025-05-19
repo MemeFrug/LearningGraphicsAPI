@@ -10,6 +10,22 @@ body, html {
     background-color: black;
 }
 
+.essential {
+    display:flex;
+    position: absolute;
+    background-color: rgba(128, 128, 128, 0.4);
+    width: 14vw;
+    height: 14vw;
+    left: 0;
+    top: 0;
+    margin: 2vw;
+    border-radius: 20px;
+    align-items: center;
+    justify-content: center;
+    flex-direction:column;
+    color: white;
+}
+
 canvas {
     width: 80%;
 }
