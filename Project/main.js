@@ -195,7 +195,7 @@ const update = (timeElapsed) => {
     const dt = timeElapsed - lastTime
     lastTime = timeElapsed
     //If the dt is too high and not undefined, skip the frame
-    if (dt > 30 || !dt) {
+    if (dt > 60 || !dt) {
         console.error("dt is too high or undefined, skipping frame");
         requestAnimationFrame(update);
         return;
