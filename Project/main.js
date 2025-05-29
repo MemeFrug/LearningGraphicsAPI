@@ -9,9 +9,7 @@ const FPSElement = document.getElementById("fps-text");
 const PlayerYVelocityElement = document.getElementById("player-vy-text");
 const PlayerXVelocityElement = document.getElementById("player-vx-text");
 
-let Timer = 0.0
-
-const Gravity = -0.5;
+const Gravity = -0.1;
 const projectEngine = new Engine(); // Instantiates on Load
 
 let pipeline = null; // Pipeline for the player
@@ -69,8 +67,8 @@ class Player extends EngineElement {
         this.velocity = new Float32Array([0.0, 0.0]);
     }
     canJump = false; // Can jump
-    jumpHeight = 13; // Jump height
-    speed = undefined; // Player speed
+    jumpHeight = 0.007; // Jump height
+    speed = 0.055; // Player speed
     vertices = {
         data: new Float32Array([
             //X,    Y,
@@ -90,25 +88,25 @@ class Player extends EngineElement {
         right: false,
     }
     update = (dt) => {
-        if (!this.canJump) { this.speed = 0.4; } // Slow down when jumping
-        else { this.speed = 0.6; } // Reset speed when not jumping
+        if (!this.canJump) { this.speed = 0.045; } // Slow down when jumping
+        else { this.speed = 0.06; } // Reset speed when not jumping
 
         if (player.keyboardEvents.jump) {
             player.jump(dt)
         };
         if (player.keyboardEvents.drop) {
-            player.velocity[1] -= player.speed;
+            player.velocity[1] -= (player.speed * dt - player.velocity[1] ) * 0.01;
         };
         if (player.keyboardEvents.left) {
-            player.velocity[0] -= player.speed;
+            player.velocity[0] -= (player.speed * dt - player.velocity[0] ) * 0.01 ;
         };
         if (player.keyboardEvents.right) {
-            player.velocity[0] += player.speed;
+            player.velocity[0] += (player.speed * dt - player.velocity[0] ) * 0.01;
         };
     }
     jump = (dt) => {
         if (player.canJump) {
-            player.velocity[1] += player.jumpHeight;
+            player.velocity[1] = player.jumpHeight * dt;
             player.canJump = false; // Reset jump
         }
         return;
@@ -182,15 +180,12 @@ const init = async () => {
         uniformObject: playerPositionUniformBuffer
     });
     projectEngine.newElement(player); // Add the player to the engine
-    
+
     //Platforms
     createPlatform(pipeline, [-4, -4], 1, 1, true);
-    let totalAdditionalWidth = 1
-    for (let i = 0; i < 10; i++) {
-        const width = Math.random() * 1 + 1
-        createPlatform(pipeline, [4*i + totalAdditionalWidth, -4], width, 1, true);
-        totalAdditionalWidth = width
-    }
+    createPlatform(pipeline, [-0.5, -3.2], 1, 1, true);
+    createPlatform(pipeline, [2, -3.4], 0.5, 0.5, true);
+    createPlatform(pipeline, [5, -4.4], 2, 0.5, true);
 
     requestAnimationFrame(update);
 };
@@ -213,11 +208,11 @@ const update = (timeElapsed) => {
 
     player.update(dt); // Update player position based on keyboard events
 
-    player.velocity[1] += Gravity; // Apply gravity to player position
-    player.velocity[1] = Math.max(-20, player.velocity[1]); // Limit the velocity to a minimum of 0.2
-    player.position[1] += player.velocity[1] * (dt * 0.001); // Update player position
-    player.velocity[0] = player.velocity[0] * 0.9; // Bring it towards 0
-    player.position[0] += player.velocity[0] * (dt * 0.001);
+    player.velocity[1] += Gravity * dt * 0.002; // Apply gravity to player position
+    player.velocity[1] = Math.max(-0.2, player.velocity[1]); // Limit the velocity to a minimum of 0.2
+    player.position[1] += player.velocity[1]; // Update player position
+    player.velocity[0] = player.velocity[0] * dt * 0.0515; // Bring it towards 0
+    player.position[0] += player.velocity[0];
 
     //Update platform positions
     collidableObjects.forEach(platform => {
@@ -236,8 +231,6 @@ const update = (timeElapsed) => {
     camera.position[1] += ((-player.position[1]/3) - camera.position[1]) * 0.2; // Set the camera position to the player position
 
     //Update UI
-    Timer = timeElapsed
-    document.getElementById('time-text').textContent = Math.round(Timer * 0.001);
     FPSElement.textContent = Math.round(1000/dt);
     PlayerXVelocityElement.textContent = Math.round(player.velocity[0]*1000);
     PlayerYVelocityElement.textContent = Math.round(player.velocity[1]*1000);
