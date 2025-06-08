@@ -9,7 +9,7 @@ const FPSElement = document.getElementById("fps-text");
 const PlayerYVelocityElement = document.getElementById("player-vy-text");
 const PlayerXVelocityElement = document.getElementById("player-vx-text");
 
-const Gravity = -0.1;
+const Gravity = -0.2;
 const projectEngine = new Engine(); // Instantiates on Load
 
 let pipeline = null; // Pipeline for the player
@@ -67,8 +67,8 @@ class Player extends EngineElement {
         this.velocity = new Float32Array([0.0, 0.0]);
     }
     canJump = false; // Can jump
-    jumpHeight = 0.007; // Jump height
-    speed = 0.055; // Player speed
+    jumpHeight = 0.09; // Jump height
+    speed = 2; // Player speed
     vertices = {
         data: new Float32Array([
             //X,    Y,
@@ -88,25 +88,25 @@ class Player extends EngineElement {
         right: false,
     }
     update = (dt) => {
-        if (!this.canJump) { this.speed = 0.045; } // Slow down when jumping
-        else { this.speed = 0.06; } // Reset speed when not jumping
+        if (!this.canJump) { this.speed = 3.1; } // Slow down when jumping
+        else { this.speed = 3.5; } // Reset speed when not jumping
 
         if (player.keyboardEvents.jump) {
             player.jump(dt)
         };
         if (player.keyboardEvents.drop) {
-            player.velocity[1] -= (player.speed * dt - player.velocity[1] ) * 0.01;
+            player.velocity[1] -= (player.speed - player.velocity[1] ) * 0.01;
         };
         if (player.keyboardEvents.left) {
-            player.velocity[0] -= (player.speed * dt - player.velocity[0] ) * 0.01 ;
+            player.velocity[0] -= (player.speed - player.velocity[0] ) * 0.01;
         };
         if (player.keyboardEvents.right) {
-            player.velocity[0] += (player.speed * dt - player.velocity[0] ) * 0.01;
+            player.velocity[0] += (player.speed - player.velocity[0] ) * 0.01;
         };
     }
     jump = (dt) => {
         if (player.canJump) {
-            player.velocity[1] = player.jumpHeight * dt;
+            player.velocity[1] = player.jumpHeight;
             player.canJump = false; // Reset jump
         }
         return;
@@ -187,32 +187,35 @@ const init = async () => {
     createPlatform(pipeline, [2, -3.4], 0.5, 0.5, true);
     createPlatform(pipeline, [5, -4.4], 2, 0.5, true);
 
-    requestAnimationFrame(update);
+    requestAnimationFrame(update); // Start the update loop
 };
 
 let lastTime = 0;
 const update = (timeElapsed) => {
     const dt = timeElapsed - lastTime
-    lastTime = timeElapsed
+    lastTime = timeElapsed;
+    
     //If the dt is too high and not undefined, skip the frame
-    if (dt > 60 || !dt) {
-        console.error("dt is too high or undefined, skipping frame");
+    if (dt > 18 || !dt) {
+        console.error(dt, " is too high or undefined, skipping frame");
         requestAnimationFrame(update);
         return;
     }
 
-    if (player.position[1] < -10) {
+    if (player.position[1] < -15) {
         player.position[0] = -4;
         player.position[1] = -2.0; // Reset player position
+        player.velocity[0] = 0; // Reset player velocity
+        player.velocity[1] = 0; // Reset player velocity
     }
 
     player.update(dt); // Update player position based on keyboard events
 
-    player.velocity[1] += Gravity * dt * 0.002; // Apply gravity to player position
+    player.velocity[1] += Gravity * dt * 0.001; // Apply gravity to player position
     player.velocity[1] = Math.max(-0.2, player.velocity[1]); // Limit the velocity to a minimum of 0.2
-    player.position[1] += player.velocity[1]; // Update player position
-    player.velocity[0] = player.velocity[0] * dt * 0.0515; // Bring it towards 0
-    player.position[0] += player.velocity[0];
+    player.position[1] += player.velocity[1] * dt * 0.1; // Update player position
+    player.velocity[0] -= player.velocity[0] * 0.1; // Bring it towards 0
+    player.position[0] += player.velocity[0] * dt * 0.01;
 
     //Update platform positions
     collidableObjects.forEach(platform => {
@@ -227,8 +230,8 @@ const update = (timeElapsed) => {
     });
 
     // Update Camera Position
-    camera.position[0] += ((-player.position[0] - 2) - camera.position[0]) * 0.07; // Set the camera position to the player position
-    camera.position[1] += ((-player.position[1]/3) - camera.position[1]) * 0.2; // Set the camera position to the player position
+    camera.position[0] += ((-player.position[0] - 2) - camera.position[0]) * 0.07 * dt; // Set the camera position to the player position
+    camera.position[1] += ((-player.position[1]/3) - camera.position[1]) * 0.02 * dt; // Set the camera position to the player position
 
     //Update UI
     FPSElement.textContent = Math.round(1000/dt);
@@ -244,7 +247,7 @@ const update = (timeElapsed) => {
     // playerPositionUniformObject.updateBuffer(player.position); // Update the player position uniform buffer
     projectEngine.RenderPass(pipeline, camera);
 
-    requestAnimationFrame(update);
+    requestAnimationFrame(update)
 };
 
 //Listen for keyboard events
